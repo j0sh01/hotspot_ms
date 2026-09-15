@@ -9,6 +9,7 @@
   "enabled",
   "column_break_1",
   "ip_address",
+  "lan_interface",
   "vpn_ip_address",
   "nas_type",
   "status",
@@ -17,6 +18,7 @@
   "shared_secret",
   "short_name",
   "column_break_2",
+  "portal_url",
   "opennds_gateway_port",
   "opennds_fas_key",
   "auth_port",
@@ -48,13 +50,21 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "192.168.10.254",
+   "default": "192.168.10.1",
+   "description": "The router's address on the guest network. Written to network.lan.ipaddr during setup.",
    "fieldname": "ip_address",
    "fieldtype": "Data",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "label": "IP Address",
+   "label": "Guest LAN IP",
    "reqd": 1
+  },
+  {
+   "default": "eth1",
+   "description": "Physical NIC the guest network is built on (usually a USB ethernet adapter). Never set this to the WAN interface.",
+   "fieldname": "lan_interface",
+   "fieldtype": "Data",
+   "label": "Guest LAN Interface"
   },
   {
    "default": "OpenWrt",
@@ -65,10 +75,11 @@
    "options": "OpenWrt\nMikroTik\nCoovaChilli\nOther"
   },
   {
+   "description": "Address this server uses to reach the router over SSH (WireGuard, ZeroTier or LAN). Needed for the live dashboard and scheduled sync.",
    "fieldname": "vpn_ip_address",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "VPN IP Address"
+   "label": "Management Address"
   },
   {
    "default": "Offline",
@@ -99,6 +110,13 @@
    "fieldname": "short_name",
    "fieldtype": "Data",
    "label": "Short Name"
+  },
+  {
+   "description": "Base URL guests are redirected to, e.g. https://portal.example.com or http://192.168.0.169:8000. The scheme decides the openNDS FAS security level.",
+   "fieldname": "portal_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Portal / FAS URL"
   },
   {
    "default": "2050",

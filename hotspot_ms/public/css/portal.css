@@ -1,0 +1,676 @@
+/* Hotspot portal styles.
+ *
+ * Hand-written and deliberately small: one accent colour, one border colour,
+ * flat surfaces, no gradients and no box shadows. The previous markup leaned on
+ * Tailwind utility strings for everything, which meant the look was defined in
+ * dozens of class attributes per element and drifted between pages.
+ *
+ * Override --accent from Hotspot Settings > Portal Accent Colour.
+ */
+
+:root {
+	--accent: #1e3a8a;
+	--accent-hover: #172c68;
+	--bg: #f6f6f4;
+	--surface: #ffffff;
+	--surface-alt: #fafaf8;
+	--line: #e2e2dd;
+	--line-strong: #cfcfc8;
+	--text: #1b1b19;
+	--muted: #6b6b64;
+	--danger: #a32318;
+	--danger-bg: #fdf2f0;  --ok: #1e3a8a;
+	--ok-bg: #f0f7f2;
+	--warn-bg: #fdf7ea;
+	--warn: #7a5300;
+	--radius: 6px;
+	--wrap: 34rem;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0;
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+p {
+	margin: 0;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+svg {
+	display: block;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.bar {
+	background: var(--surface);
+	border-bottom: 1px solid var(--line);
+}
+
+.bar-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	max-width: var(--wrap);
+	margin: 0 auto;
+	padding: 0.75rem 1rem;
+}
+
+.wrap {
+	max-width: var(--wrap);
+	margin: 0 auto;
+	padding: 1.25rem 1rem 4rem;
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.stack-sm {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.row-between {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.spacer {
+	flex: 1;
+}
+
+/* ------------------------------------------------------------------- brand */
+
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-width: 0;
+}
+
+.brand-logo {
+	width: 1.75rem;
+	height: 1.75rem;
+	flex: 0 0 auto;
+	border-radius: var(--radius);
+	object-fit: contain;
+}
+
+.brand-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	flex: 0 0 auto;
+	border-radius: var(--radius);
+	background: var(--accent);
+	color: #fff;
+}
+
+.brand-name {
+	font-size: 1rem;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.bar-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex: 0 0 auto;
+}
+
+.support {
+	font-size: 0.8125rem;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.support a {
+	color: var(--muted);
+}
+
+/* Language switch: two flat buttons, the active one underlined. */
+.lang {
+	display: flex;
+	gap: 0.25rem;
+}
+
+.lang button {
+	font: inherit;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	padding: 0.15rem 0.35rem;
+	color: var(--muted);
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	cursor: pointer;
+}
+
+.lang button.is-active {
+	color: var(--text);
+	border-bottom-color: var(--accent);
+}
+
+/* -------------------------------------------------------------------- text */
+
+.page-title {
+	font-size: 1.375rem;
+}
+
+.section-title {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.small {
+	font-size: 0.8125rem;
+}
+
+.mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.amount {
+	font-size: 1.25rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------- cards */
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem;
+}
+
+.card-flush {
+	padding: 0;
+	overflow: hidden;
+}
+
+.divider {
+	height: 1px;
+	background: var(--line);
+	border: 0;
+	margin: 0;
+}
+
+/* Plan row: a flat, clickable list item. */
+.plan {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.875rem 1rem;
+}
+
+.plan + .plan {
+	border-top: 1px solid var(--line);
+}
+
+.plan-main {
+	min-width: 0;
+}
+
+.plan-name {
+	font-weight: 600;
+}
+
+.plan-meta {
+	font-size: 0.8125rem;
+	color: var(--muted);
+	margin-top: 0.125rem;
+}
+
+.plan-price {
+	text-align: right;
+	flex: 0 0 auto;
+}
+
+.plan-price .amount {
+	display: block;
+}
+
+.plan-price .small {
+	display: block;
+	color: var(--muted);
+	margin-bottom: 0.375rem;
+}
+
+/* Key/value rows used on the status page. */
+.kv {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.625rem 0;
+	font-size: 0.9375rem;
+}
+
+.kv + .kv {
+	border-top: 1px solid var(--line);
+}
+
+.kv dt {
+	color: var(--muted);
+}
+
+.kv dd {
+	margin: 0;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- buttons */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 2.5rem;
+	padding: 0.5rem 1rem;
+	font: inherit;
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+	border-color: var(--muted);
+}
+
+.btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.btn-primary {
+	color: #fff;
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+	border-color: var(--accent-hover);
+}
+
+.btn-block {
+	display: flex;
+	width: 100%;
+}
+
+.btn-sm {
+	min-height: 2rem;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.8125rem;
+}
+
+/* A text-style button, used for secondary paths like "have a voucher". */
+.btn-link {
+	font: inherit;
+	font-size: 0.875rem;
+	color: var(--accent);
+	background: none;
+	border: 0;
+	padding: 0;
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+}
+
+.label {
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.input {
+	font: inherit;
+	width: 100%;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem;
+	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+}
+
+.input:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+	border-color: var(--accent);
+}
+
+.input-code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 1.125rem;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	text-align: center;
+}
+
+.input-group {
+	display: flex;
+	align-items: stretch;
+	gap: 0.5rem;
+}
+
+.prefix {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 0.75rem;
+	font-size: 0.9375rem;
+	color: var(--muted);
+	background: var(--surface-alt);
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+}
+
+/* ----------------------------------------------------------------- notices */
+
+.notice {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.75rem 0.875rem;
+	font-size: 0.875rem;
+	border: 1px solid var(--line);
+	border-left-width: 3px;
+	border-radius: var(--radius);
+	background: var(--surface-alt);
+}
+
+.notice-ok {
+	color: var(--ok);
+	background: var(--ok-bg);
+	border-color: var(--ok);
+}
+
+.notice-err {
+	color: var(--danger);
+	background: var(--danger-bg);
+	border-color: var(--danger);
+}
+
+.notice-info {
+	color: var(--muted);
+	border-color: var(--line-strong);
+}
+
+.notice-warn {
+	color: var(--warn);
+	background: var(--warn-bg);
+	border-color: var(--warn);
+}
+
+/* ------------------------------------------------------------------ badges */
+
+.badge {
+	display: inline-block;
+	padding: 0.0625rem 0.4375rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--muted);
+	border: 1px solid var(--line-strong);
+	border-radius: 999px;
+}
+
+.badge-ok {
+	color: var(--ok);
+	border-color: var(--ok);
+}
+
+.badge-err {
+	color: var(--danger);
+	border-color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- progress */
+
+.meter {
+	height: 4px;
+	background: var(--line);
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.meter > span {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+}
+
+/* ------------------------------------------------------------------ modals */
+
+.modal {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	background: rgba(20, 20, 18, 0.55);
+}
+
+.modal-card {
+	width: 100%;
+	max-width: 26rem;
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+}
+
+.modal-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.875rem 1rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.modal-body {
+	padding: 1rem;
+}
+
+.modal-foot {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.875rem 1rem;
+	border-top: 1px solid var(--line);
+}
+
+.modal-foot .btn {
+	flex: 1;
+}
+
+.close-x {
+	font: inherit;
+	font-size: 1.25rem;
+	line-height: 1;
+	color: var(--muted);
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+/* Ad wall: full-screen, dark, and nothing else is reachable. */
+.adwall {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	background: rgba(15, 15, 14, 0.94);
+}
+
+.adwall-card {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 30rem;
+	background: var(--surface);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.adwall-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 11rem;
+	background: #111;
+	color: #eee;
+}
+
+.adwall-stage video,
+.adwall-stage img {
+	display: block;
+	width: 100%;
+	max-height: 45vh;
+	object-fit: contain;
+}
+
+.adwall-text {
+	padding: 1.5rem;
+	text-align: center;
+}
+
+/* ---------------------------------------------------------------- spinner */
+
+.spinner {
+	display: inline-block;
+	width: 0.875rem;
+	height: 0.875rem;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spinner {
+		animation: none;
+	}
+}
+
+/* -------------------------------------------------------------------- utility */
+
+.hidden {
+	display: none !important;
+}
+
+.center {
+	text-align: center;
+}
+
+.footer {
+	max-width: var(--wrap);
+	margin: 0 auto;
+	padding: 0 1rem 2rem;
+	font-size: 0.75rem;
+	color: var(--muted);
+	text-align: center;
+}
+
+.empty {
+	padding: 1.5rem 1rem;
+	font-size: 0.875rem;
+	color: var(--muted);
+	text-align: center;
+}
+
+@media (max-width: 26rem) {
+	.support {
+		display: none;
+	}
+
+	.wrap {
+		padding-top: 1rem;
+	}
+}

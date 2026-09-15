@@ -1,5 +1,5 @@
 app_name = "hotspot_ms"
-app_title = "Hotspot MS"
+app_title = "KiliGrid Hotspot"
 app_publisher = "Sydney Kibanga"
 app_description = " "
 app_email = "sydneykb38@gmail.com"
@@ -56,8 +56,14 @@ app_license = "mit"
 # Home Pages
 # ----------
 
-# application home page (will override Website Settings)
-home_page = "index"
+# The guest portal is the whole public site: there is no marketing landing page.
+# Frappe resolves an empty path through this value, and the redirect below keeps
+# the root URL honest for anyone who bookmarks it.
+home_page = "hotspot/login"
+
+website_redirects = [
+	{"source": "/", "target": "/hotspot/login"},
+]
 
 # website user home page (by Role)
 # role_home_page = {

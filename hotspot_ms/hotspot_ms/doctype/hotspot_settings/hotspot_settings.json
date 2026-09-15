@@ -5,17 +5,33 @@
  "engine": "InnoDB",
  "field_order": [
   "portal_brand",
+  "portal_logo",
+  "portal_accent_color",
   "customer_support_number",
   "enable_maintenance_mode",
   "maintenance_message"
  ],
  "fields": [
   {
-   "default": "Hapa Kitonga WiFi",
+   "default": "KiliGrid Technology",
+   "description": "Shown to guests on every portal page. Defaults to the WiFi network name if left blank.",
    "fieldname": "portal_brand",
    "fieldtype": "Data",
    "label": "Portal Brand",
    "reqd": 1
+  },
+  {
+   "description": "Square logo shown in the portal header. Falls back to the bundled KiliGrid mark.",
+   "fieldname": "portal_logo",
+   "fieldtype": "Attach Image",
+   "label": "Portal Logo"
+  },
+  {
+   "default": "#1e3a8a",
+   "description": "Single accent colour for buttons, links and highlights on the guest portal.",
+   "fieldname": "portal_accent_color",
+   "fieldtype": "Color",
+   "label": "Portal Accent Colour"
   },
   {
    "fieldname": "customer_support_number",

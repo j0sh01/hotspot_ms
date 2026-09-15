@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-import frappe
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import frappe
 from frappe.utils import cint, flt, get_datetime, now_datetime
 
 DEAUTH_PENDING_PREFIX = "DEAUTH_PENDING|"
@@ -91,99 +94,142 @@ def auto_activate_stuck_vouchers() -> dict[str, int]:
 	txs = frappe.get_all(
 		"Payment Transaction",
 		filters={"status": "Successful", "voucher": ["is", "set"]},
-		fields=["name", "voucher", "webhook_payload"]
+		fields=["name", "voucher", "webhook_payload"],
 	)
-	
+
 	activated = 0
 	for tx in txs:
 		voucher = frappe.get_doc("Hotspot Voucher", tx.voucher)
-		if voucher.status == "New":
-			payload = {}
-			if tx.webhook_payload:
-				try:
-					payload = json.loads(tx.webhook_payload)
-				except Exception:
-					pass
-			
-			data = payload.get("data", {})
-			metadata = data.get("metadata", {})
-			
-			mac_address = metadata.get("mac_address")
-			if mac_address:
-				try:
-					from hotspot_ms.api.portal import activate_voucher
-					res = activate_voucher(
-						voucher_code=voucher.voucher_code,
-						mac_address=mac_address,
-						ip_address=metadata.get("ip_address"),
-						nas_device=metadata.get("nas_device")
-					)
-					if res.get("ok"):
-						activated += 1
-				except Exception:
-					pass
-					
+		if voucher.status != "New":
+			continue
+
+		payload = {}
+		if tx.webhook_payload:
+			try:
+				payload = json.loads(tx.webhook_payload)
+			except Exception:
+				pass
+
+		data = payload.get("data", {})
+		metadata = data.get("metadata", {})
+
+		mac_address = metadata.get("mac_address")
+		if not mac_address:
+			continue
+
+		try:
+			from hotspot_ms.api.portal import activate_voucher
+
+			res = activate_voucher(
+				voucher_code=voucher.voucher_code,
+				mac_address=mac_address,
+				ip_address=metadata.get("ip_address"),
+				nas_device=metadata.get("nas_device"),
+			)
+			if res.get("ok"):
+				activated += 1
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "auto_activate_stuck_vouchers failed")
+
 	return {"auto_activated_vouchers": activated}
 
 
-def sync_all_routers_data():
+def _safe_int(value: Any) -> int:
+	try:
+		return int(value)
+	except (TypeError, ValueError):
+		return 0
+
+
+def _fetch_router_clients(router) -> tuple[str, dict[str, Any] | None, str]:
+	"""SSH one router and return its openNDS client map.
+
+	Runs off the main thread, so it must not touch frappe.db or frappe.local.
+	Returns (router_name, clients, error).
 	"""
-	Scheduled task that connects to each enabled OpenWrt NAS Device
-	over WireGuard and fetches the real-time openNDS client json.
+	try:
+		cmd = [
+			"ssh",
+			"-o",
+			"StrictHostKeyChecking=no",
+			"-o",
+			"UserKnownHostsFile=/dev/null",
+			"-o",
+			"ConnectTimeout=10",
+			f"root@{router.vpn_ip_address}",
+			"ndsctl json",
+		]
+		res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+		if res.returncode != 0:
+			return router.name, None, (res.stderr.decode("utf-8", "replace") or "SSH execution failed")
+
+		payload = json.loads(res.stdout.decode("utf-8", "replace"))
+		return router.name, (payload.get("clients") or {}), ""
+	except Exception as exc:
+		return router.name, None, str(exc)
+
+
+def sync_all_routers_data() -> dict[str, int]:
+	"""Refresh Hotspot Active Client rows for every reachable OpenWrt NAS.
+
+	This used to SSH each router one after another inside the scheduler, so the
+	run time grew linearly with the number of routers and one slow box delayed
+	every other. SSH now runs in parallel; database writes stay on the main
+	thread because frappe.db is not thread-safe.
 	"""
-	routers = frappe.get_all("Nas Device", filters={"enabled": 1, "nas_type": "OpenWrt"}, fields=["name", "vpn_ip_address", "ip_address"])
-	
-	for router in routers:
-		if not router.vpn_ip_address:
+	routers = frappe.get_all(
+		"Nas Device",
+		filters={"enabled": 1, "nas_type": "OpenWrt"},
+		fields=["name", "vpn_ip_address"],
+	)
+	targets = [router for router in routers if (router.vpn_ip_address or "").strip()]
+	if not targets:
+		return {"routers": 0, "clients": 0}
+
+	with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+		results = {name: (clients, error) for name, clients, error in pool.map(_fetch_router_clients, targets)}
+
+	online = 0
+	client_rows = 0
+	now = frappe.utils.now()
+
+	for router in targets:
+		clients, error = results.get(router.name, (None, "no result"))
+		if error:
+			frappe.log_error(title=f"Failed to sync router {router.name}", message=error)
+			frappe.db.set_value(
+				"Nas Device",
+				router.name,
+				{"status": "Offline", "last_heartbeat": now},
+				update_modified=False,
+			)
 			continue
-			
-		try:
-			# 1. Run system SSH directly (100% reliable with system SSH keys)
-			cmd = [
-				"ssh",
-				"-o", "StrictHostKeyChecking=no",
-				"-o", "UserKnownHostsFile=/dev/null",
-				"-o", "ConnectTimeout=10",
-				f"root@{router.vpn_ip_address}",
-				"ndsctl json"
-			]
-			res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
-			if res.returncode != 0:
-				raise Exception(res.stderr.decode("utf-8") or "SSH execution failed")
 
-			output = res.stdout.decode("utf-8")
-			
-			# 2. Parse JSON
-			nds_data = json.loads(output)
-			clients = nds_data.get('clients', {})
-			
-			def safe_int(val):
-				try:
-					return int(val)
-				except (ValueError, TypeError):
-					return 0
+		frappe.db.delete("Hotspot Active Client", {"nas_device": router.name})
+		for mac, client in (clients or {}).items():
+			# ndsctl json reports the state lowercase; compare tolerantly.
+			if (client.get("state") or "").strip().lower() != "authenticated":
+				continue
+			frappe.get_doc(
+				{
+					"doctype": "Hotspot Active Client",
+					"mac_address": mac,
+					"ip_address": client.get("ip"),
+					"nas_device": router.name,
+					"download_bytes": _safe_int(client.get("download_this_session")),
+					"upload_bytes": _safe_int(client.get("upload_this_session")),
+					"connected_since": now,
+				}
+			).insert(ignore_permissions=True)
+			client_rows += 1
 
-			# Clear old active clients for this router
-			frappe.db.delete("Hotspot Active Client", {"nas_device": router.name})
-			
-			# 4. Insert real-time active clients
-			for mac, data in clients.items():
-				if data.get('state') == 'Authenticated':
-					frappe.get_doc({
-						"doctype": "Hotspot Active Client",
-						"mac_address": mac,
-						"ip_address": data.get('ip'),
-						"nas_device": router.name,
-						"download_bytes": safe_int(data.get('download_this_session')),
-						"upload_bytes": safe_int(data.get('upload_this_session')),
-						"connected_since": frappe.utils.now()
-					}).insert(ignore_permissions=True)
-						
-			# Mark router as Online
-			frappe.db.set_value("Nas Device", router.name, {"status": "Online", "last_heartbeat": frappe.utils.now()})
-			frappe.db.commit()
-			
-		except Exception as e:
-			frappe.log_error(title=f"Failed to sync router {router.name}", message=str(e))
-			frappe.db.set_value("Nas Device", router.name, {"status": "Offline", "last_heartbeat": frappe.utils.now()})
-			frappe.db.commit()
+		frappe.db.set_value(
+			"Nas Device",
+			router.name,
+			{"status": "Online", "last_heartbeat": now},
+			update_modified=False,
+		)
+		online += 1
+
+	frappe.db.commit()
+	return {"routers": online, "clients": client_rows}

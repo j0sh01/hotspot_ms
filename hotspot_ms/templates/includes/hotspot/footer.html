@@ -1,16 +1,12 @@
-<footer class="w-full py-8 px-6 border-t border-slate-200 bg-white mt-auto">
-  <div class="max-w-7xl mx-auto flex flex-col items-center text-center gap-3">
-    <div>
-      {% if customer_support_tel %}
-        <a class="text-slate-600 hover:text-primary text-base font-bold transition-colors" href="tel:{{ customer_support_tel | e }}">
-          Msaada: <span class="font-black text-slate-800">{{ customer_support_number or "+255-789968024" | e }}</span>
-        </a>
-      {% else %}
-        <a class="text-slate-600 hover:text-primary text-base font-bold transition-colors" href="tel:+255789968024">
-          Msaada: <span class="font-black text-slate-800">+255-789968024</span>
-        </a>
-      {% endif %}
-    </div>
-    <p class="text-slate-500 text-sm">© {{ current_year or 2026 }} {{ portal_brand or "Hapa Kitonga WiFi" }}. {{ _("All rights reserved.") }}</p>
-  </div>
+<footer class="footer">
+  <p>
+    {{ portal_brand or "WiFi" }}
+    {% if customer_support_tel %}
+      &middot; <a href="tel:{{ customer_support_tel | e }}">{{ customer_support_number | e }}</a>
+    {% endif %}
+    {% if current_year %} &middot; {{ current_year }}{% endif %}
+  </p>
+  <p>
+    <a href="https://www.kiligridtech.com" target="_blank" rel="noopener">{{ _("Powered by KiliGrid Technology") }}</a>
+  </p>
 </footer>

@@ -1,276 +1,226 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang or 'sw' }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="/assets/hotspot_ms/css/hotspot_portal.css" />
-  <title>{{ portal_status_title or "Session Status | Hapa Kitonga WiFi" }}</title>
-</head>
-<body class="bg-background-light font-display antialiased text-slate-900">
-  <div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light overflow-x-hidden">
-    <div class="fixed inset-0 z-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 pointer-events-none"></div>
-    <div class="layout-container flex h-full grow flex-col z-10">
-      {% include "templates/includes/hotspot/nav.html" %}
-
-      <main class="flex flex-1 justify-center py-10 px-4">
-        <div class="layout-content-container flex flex-col max-w-[800px] flex-1">
-          <div class="flex flex-col gap-2 mb-8 text-center md:text-left">
-            <h1 class="text-slate-900 text-4xl font-black leading-tight tracking-tight">{{ _("Session Status") }}</h1>
-            <p class="text-slate-500 text-lg font-normal">{{ _("Manage your active Wi-Fi connection in real-time") }}</p>
-          </div>
-
-          <div class="bg-white rounded-xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-            <div class="relative h-48 bg-primary overflow-hidden">
-              <div class="absolute inset-0 bg-gradient-to-r from-primary to-blue-400 opacity-90"></div>
-              <div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
-              <div class="relative h-full flex items-center px-8 gap-6">
-                <div class="size-20 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-white">
-                  <span class="text-xl font-black">{{ _("LIVE") }}</span>
-                </div>
-                <div class="flex flex-col">
-                  <span id="status-pill" class="px-2 py-0.5 bg-green-500 text-white text-[10px] font-bold uppercase rounded-full w-fit mb-2 flex items-center gap-1">
-                    <span class="size-1.5 bg-white rounded-full animate-pulse"></span>
-                    {{ _("Connected") }}
-                  </span>
-                  <h2 class="text-white text-2xl font-bold">{{ _("Active Session Details") }}</h2>
-                  <p class="text-white/80 text-sm">{{ _("Connected via hotspot portal") }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="p-8">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-                <div class="space-y-4">
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Session ID") }}</span>
-                    <div class="flex items-center gap-2">
-                      <span id="session-id" class="text-slate-900 font-mono font-bold text-lg">-</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Voucher Code") }}</span>
-                    <span id="voucher-code" class="text-slate-900 font-mono font-bold text-lg">-</span>
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Device MAC") }}</span>
-                    <span id="device-mac" class="text-slate-900 font-mono font-bold text-lg">-</span>
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Device IP") }}</span>
-                    <span id="device-ip" class="text-slate-900 font-mono font-bold text-lg">-</span>
-                  </div>
-                </div>
-                <div class="space-y-4">
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Start Time") }}</span>
-                    <div class="flex items-center gap-2 text-slate-900 font-semibold">
-                      <span id="start-time">-</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{{ _("Expiry Time") }}</span>
-                    <div class="flex items-center gap-2 text-amber-600 font-semibold">
-                      <span id="expiry-time">-</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="space-y-8">
-                <div class="flex flex-col gap-3">
-                  <div class="flex justify-between items-end">
-                    <div class="flex items-center gap-2">
-                      <p class="text-slate-900 text-base font-semibold leading-normal">{{ _("Usage (MB)") }}</p>
-                    </div>
-                    <p class="text-slate-900 text-sm font-bold leading-normal"><span id="usage-text">0MB</span></p>
-                  </div>
-                  <div class="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
-                    <div id="usage-bar" class="h-full rounded-full bg-primary" style="width: 0%;"></div>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <p id="usage-note" class="text-slate-500 text-xs font-medium">{{ _("Usage data will appear after session accounting updates.") }}</p>
-                    <span id="usage-badge" class="text-xs font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">{{ _("Live") }}</span>
-                  </div>
-                </div>
-
-                <div class="flex flex-col gap-3">
-                  <div class="flex justify-between items-end">
-                    <div class="flex items-center gap-2">
-                      <p class="text-slate-900 text-base font-semibold leading-normal">{{ _("Remaining (MB)") }}</p>
-                    </div>
-                    <p class="text-slate-900 text-sm font-bold leading-normal"><span id="remaining-text">{{ _("Unlimited") }}</span></p>
-                  </div>
-                  <div class="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
-                    <div id="remaining-bar" class="h-full rounded-full bg-primary/40" style="width: 100%;"></div>
-                  </div>
-                  <div class="flex justify-between items-center">
-                    <p id="remaining-note" class="text-slate-500 text-xs font-medium">{{ _("Unlimited plan.") }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div id="status-message" class="mt-5 text-sm font-medium"></div>
-            </div>
-          </div>
-
-          <div class="mt-8 flex flex-col items-center gap-2">
-            <p class="text-slate-400 text-sm">{{ _("Need help with your session?") }}</p>
-            <div class="flex gap-4">
-              <a class="text-primary text-sm font-bold hover:underline" href="#">{{ _("Customer Support") }}</a>
-              <span class="text-slate-300">•</span>
-              <a class="text-primary text-sm font-bold hover:underline" href="#">{{ _("Usage Tips") }}</a>
-              <span class="text-slate-300">•</span>
-              <a class="text-primary text-sm font-bold hover:underline" href="/hotspot/login">{{ _("Buy Data") }}</a>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {% include "templates/includes/hotspot/footer.html" %}
-    </div>
-  </div>
-
+  <title>{{ _(portal_status_title) }}</title>
+  <link rel="stylesheet" href="/assets/hotspot_ms/css/portal.css" />
+  <style>:root { --accent: {{ portal_accent_color | e }}; --accent-hover: {{ portal_accent_color | e }}; }</style>
   <script>
     window.HOTSPOT_TRANSLATIONS = {
       "Connected": "{{ _('Connected') }}",
-      "Offline": "{{ _('Offline') }}",
+      "Ended": "{{ _('Ended') }}",
       "Session is active.": "{{ _('Session is active.') }}",
       "No active session.": "{{ _('No active session.') }}",
       "Failed to load session status.": "{{ _('Failed to load session status.') }}",
       "Unlimited": "{{ _('Unlimited') }}",
-      "Unlimited plan usage": "{{ _('Unlimited plan usage') }}",
-      "Unlimited plan.": "{{ _('Unlimited plan.') }}",
-      "{0}% of your total data consumed": "{{ _('{0}% of your total data consumed') }}",
-      "{0}% data remaining": "{{ _('{0}% data remaining') }}"
+      "No data limit on this plan.": "{{ _('No data limit on this plan.') }}",
+      "{0}% of your data used": "{{ _('{0}% of your data used') }}",
+      "{0}% of your data left": "{{ _('{0}% of your data left') }}"
     };
-
-    function __(str, args=[]) {
-      let out = window.HOTSPOT_TRANSLATIONS[str] || str;
-      args.forEach((arg, i) => {
-        out = out.replace(`{${i}}`, arg);
-      });
+    function __(text, args) {
+      args = args || [];
+      var out = window.HOTSPOT_TRANSLATIONS[text] || text;
+      for (var i = 0; i < args.length; i++) out = out.replace("{" + i + "}", args[i]);
       return out;
     }
+  </script>
+</head>
+<body>
+  {% include "templates/includes/hotspot/nav.html" %}
 
+  <main class="wrap stack">
+    <div class="row-between">
+      <h1 class="page-title">{{ _("Session status") }}</h1>
+      <span id="status-pill" class="badge badge-ok">{{ _("Connected") }}</span>
+    </div>
+
+    <section class="card card-flush">
+      <dl style="margin:0;padding:0.25rem 1rem;">
+        <div class="kv"><dt>{{ _("Session") }}</dt><dd id="session-id" class="mono">-</dd></div>
+        <div class="kv"><dt>{{ _("Voucher") }}</dt><dd id="voucher-code" class="mono">-</dd></div>
+        <div class="kv"><dt>{{ _("Device") }}</dt><dd id="device-mac" class="mono">-</dd></div>
+        <div class="kv"><dt>{{ _("IP address") }}</dt><dd id="device-ip" class="mono">-</dd></div>
+        <div class="kv"><dt>{{ _("Started") }}</dt><dd id="start-time">-</dd></div>
+        <div class="kv"><dt>{{ _("Expires") }}</dt><dd id="expiry-time">-</dd></div>
+      </dl>
+    </section>
+
+    <section class="card stack-sm">
+      <div class="row-between">
+        <span class="section-title">{{ _("Data used") }}</span>
+        <span id="usage-text" class="small mono">0 MB</span>
+      </div>
+      <div class="meter"><span id="usage-bar" style="width:0%"></span></div>
+      <p id="usage-note" class="small muted">{{ _("Usage updates as you browse.") }}</p>
+    </section>
+
+    <section class="card stack-sm">
+      <div class="row-between">
+        <span class="section-title">{{ _("Data left") }}</span>
+        <span id="remaining-text" class="small mono">{{ _("Unlimited") }}</span>
+      </div>
+      <div class="meter"><span id="remaining-bar" style="width:100%"></span></div>
+      <p id="remaining-note" class="small muted">{{ _("No data limit on this plan.") }}</p>
+    </section>
+
+    <div id="status-message" class="notice hidden"><p></p></div>
+
+    <div class="row" style="justify-content:center;">
+      <a class="btn" href="/hotspot/login">{{ _("Buy more data") }}</a>
+      <button id="btn-logout" type="button" class="btn">{{ _("Log out") }}</button>
+    </div>
+  </main>
+
+  {% include "templates/includes/hotspot/footer.html" %}
+
+  <script>
     (function () {
-      const query = new URLSearchParams(window.location.search);
-      const urlSessionId = query.get("session_id") || "";
-      const urlVoucherCode = query.get("voucher_code") || "";
+      "use strict";
 
-      const statusMessage = document.getElementById("status-message");
-      const statusPill = document.getElementById("status-pill");
-      const sessionIdEl = document.getElementById("session-id");
-      const voucherCodeEl = document.getElementById("voucher-code");
-      const deviceMacEl = document.getElementById("device-mac");
-      const deviceIpEl = document.getElementById("device-ip");
-      const startTimeEl = document.getElementById("start-time");
-      const expiryTimeEl = document.getElementById("expiry-time");
-      const usageTextEl = document.getElementById("usage-text");
-      const usageBarEl = document.getElementById("usage-bar");
-      const usageNoteEl = document.getElementById("usage-note");
-      const remainingTextEl = document.getElementById("remaining-text");
-      const remainingBarEl = document.getElementById("remaining-bar");
-      const remainingNoteEl = document.getElementById("remaining-note");
-      let closeTimer = null;
-      let closeTriggered = false;
+      var sessionId = getParam("session_id");
+      var voucherCode = getParam("voucher_code");
 
-      function showMessage(ok, text) {
-        statusMessage.textContent = text || "";
-        statusMessage.className = ok ? "mt-5 text-sm font-medium text-green-600" : "mt-5 text-sm font-medium text-red-600";
+      var messageEl = document.getElementById("status-message");
+      var pillEl = document.getElementById("status-pill");
+      var el = {
+        sessionId: document.getElementById("session-id"),
+        voucherCode: document.getElementById("voucher-code"),
+        mac: document.getElementById("device-mac"),
+        ip: document.getElementById("device-ip"),
+        start: document.getElementById("start-time"),
+        expiry: document.getElementById("expiry-time"),
+        usageText: document.getElementById("usage-text"),
+        usageBar: document.getElementById("usage-bar"),
+        usageNote: document.getElementById("usage-note"),
+        remainingText: document.getElementById("remaining-text"),
+        remainingBar: document.getElementById("remaining-bar"),
+        remainingNote: document.getElementById("remaining-note")
+      };
+
+      function getParam(key) {
+        var vars = window.location.search.substring(1).split("&");
+        for (var i = 0; i < vars.length; i++) {
+          var pair = vars[i].split("=");
+          if (pair[0] === key) return decodeURIComponent(pair[1] || "");
+        }
+        return "";
       }
 
-      async function callApi(method, params) {
-        const q = new URLSearchParams(params || {}).toString();
-        const url = `/api/method/${method}` + (q ? `?${q}` : "");
-        const res = await fetch(url, { credentials: "same-origin" });
-        const data = await res.json();
-        return data.message || {};
+      function showMessage(ok, text) {
+        messageEl.classList.remove("hidden", "notice-ok", "notice-err");
+        messageEl.classList.add(ok ? "notice-ok" : "notice-err");
+        messageEl.querySelector("p").textContent = text || "";
+      }
+
+      function callApi(method, params) {
+        var query = [];
+        for (var key in params) {
+          if (params.hasOwnProperty(key) && params[key]) {
+            query.push(encodeURIComponent(key) + "=" + encodeURIComponent(params[key]));
+          }
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "/api/method/" + method + (query.length ? "?" + query.join("&") : ""), false);
+        xhr.setRequestHeader("Accept", "application/json");
+        xhr.send();
+        try {
+          var data = JSON.parse(xhr.responseText);
+          return data.message || {};
+        } catch (e) {
+          return { ok: false, message: __("Failed to load session status.") };
+        }
       }
 
       function formatDate(value) {
         if (!value) return "-";
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return value;
-        return d.toLocaleString();
+        var parsed = new Date(String(value).replace(" ", "T"));
+        if (isNaN(parsed.getTime())) return String(value);
+        return parsed.toLocaleString();
       }
 
-      function updateBars(totalMb, dataLimitMb, remainingMb) {
-        const total = Number(totalMb || 0);
-        const limit = Number(dataLimitMb || 0);
+      function clampPercent(value) {
+        var num = Number(value || 0);
+        if (isNaN(num) || num < 0) return 0;
+        if (num > 100) return 100;
+        return num;
+      }
+
+      function updateBars(totalMb, limitMb, remainingMb) {
+        var total = Number(totalMb || 0);
+        var limit = Number(limitMb || 0);
 
         if (limit > 0) {
-          const usedPct = Math.max(0, Math.min(100, (total / limit) * 100));
-          const remainingPct = Math.max(0, Math.min(100, (Number(remainingMb || 0) / limit) * 100));
+          var usedPct = clampPercent((total / limit) * 100);
+          var leftPct = clampPercent((Number(remainingMb || 0) / limit) * 100);
 
-          usageTextEl.textContent = `${total.toFixed(2)}MB / ${limit.toFixed(2)}MB`;
-          usageBarEl.style.width = `${usedPct}%`;
-          usageNoteEl.textContent = __("{0}% of your total data consumed", [usedPct.toFixed(0)]);
+          el.usageText.textContent = total.toFixed(2) + " MB / " + limit.toFixed(2) + " MB";
+          el.usageBar.style.width = usedPct + "%";
+          el.usageNote.textContent = __("{0}% of your data used", [usedPct.toFixed(0)]);
 
-          remainingTextEl.textContent = `${Number(remainingMb || 0).toFixed(2)}MB`;
-          remainingBarEl.style.width = `${remainingPct}%`;
-          remainingNoteEl.textContent = __("{0}% data remaining", [remainingPct.toFixed(0)]);
-        } else {
-          usageTextEl.textContent = `${total.toFixed(2)}MB`;
-          usageBarEl.style.width = "100%";
-          usageNoteEl.textContent = __("Unlimited plan usage");
-
-          remainingTextEl.textContent = __("Unlimited");
-          remainingBarEl.style.width = "100%";
-          remainingNoteEl.textContent = __("Unlimited plan.");
+          el.remainingText.textContent = Number(remainingMb || 0).toFixed(2) + " MB";
+          el.remainingBar.style.width = leftPct + "%";
+          el.remainingNote.textContent = __("{0}% of your data left", [leftPct.toFixed(0)]);
+          return;
         }
+
+        el.usageText.textContent = total.toFixed(2) + " MB";
+        el.usageBar.style.width = "100%";
+        el.usageNote.textContent = __("No data limit on this plan.");
+        el.remainingText.textContent = __("Unlimited");
+        el.remainingBar.style.width = "100%";
+        el.remainingNote.textContent = __("No data limit on this plan.");
       }
 
-      function closeSessionPage() {
-        if (closeTriggered) return;
-        closeTriggered = true;
-        window.setTimeout(() => {
-          try {
-            window.close();
-          } catch (e) {
-            // If the browser blocks closing, stay on this screen.
-          }
-        }, 2000);
-      }
-
-      async function refreshStatus() {
-        const params = urlSessionId ? { session_id: urlSessionId } : { voucher_code: urlVoucherCode };
-        const result = await callApi("hotspot_ms.api.portal.session_status", params);
+      function refresh() {
+        var params = sessionId ? { session_id: sessionId } : { voucher_code: voucherCode };
+        var result = callApi("hotspot_ms.api.portal.session_status", params);
 
         if (!result.ok) {
+          pillEl.className = "badge badge-err";
+          pillEl.textContent = __("Ended");
           showMessage(false, result.message || __("No active session."));
-          statusPill.className = "px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold uppercase rounded-full w-fit mb-2 flex items-center gap-1";
-          statusPill.innerHTML = `<span class="size-1.5 bg-white rounded-full"></span> ${__("Offline")}`;
           if ((result.code || "") === "NO_ACTIVE_SESSION") {
             window.location.href = "/hotspot/expired";
           }
           return;
         }
 
-        const session = result.session || {};
-        const voucher = result.voucher || {};
+        var session = result.session || {};
+        var voucher = result.voucher || {};
 
-        sessionIdEl.textContent = session.session_id || urlSessionId || "-";
-        voucherCodeEl.textContent = voucher.code || urlVoucherCode || "-";
-        deviceMacEl.textContent = session.mac_address || "-";
-        deviceIpEl.textContent = session.ip_address || "-";
-        startTimeEl.textContent = formatDate(session.start_time);
-        expiryTimeEl.textContent = formatDate(voucher.expires_on);
+        el.sessionId.textContent = session.session_id || sessionId || "-";
+        el.voucherCode.textContent = voucher.code || voucherCode || "-";
+        el.mac.textContent = session.mac_address || "-";
+        el.ip.textContent = session.ip_address || "-";
+        el.start.textContent = formatDate(session.start_time);
+        el.expiry.textContent = formatDate(voucher.expires_on);
 
         updateBars(session.total_mb, voucher.data_limit_mb, voucher.remaining_mb);
-
-        statusPill.className = "px-2 py-0.5 bg-green-500 text-white text-[10px] font-bold uppercase rounded-full w-fit mb-2 flex items-center gap-1";
-        statusPill.innerHTML = `<span class="size-1.5 bg-white rounded-full animate-pulse"></span> ${__("Connected")}`;
+        pillEl.className = "badge badge-ok";
+        pillEl.textContent = __("Connected");
         showMessage(true, __("Session is active."));
-        closeSessionPage();
+
+        // This tab was opened by the captive portal; tidy it up if we can.
+        window.setTimeout(function () {
+          try { window.close(); } catch (e) {}
+        }, 4000);
       }
 
-      window.addEventListener("load", async function () {
-        try {
-          await refreshStatus();
-        } catch (e) {
-          showMessage(false, __("Failed to load session status."));
-        }
-      });
+      var btnLogout = document.getElementById("btn-logout");
+      if (btnLogout) {
+        btnLogout.addEventListener("click", function () {
+          if (!sessionId) {
+            window.location.href = "/hotspot/login";
+            return;
+          }
+          btnLogout.disabled = true;
+          callApi("hotspot_ms.api.portal.logout_session", { session_id: sessionId });
+          window.location.href = "/hotspot/expired";
+        });
+      }
+
+      refresh();
     })();
   </script>
 </body>

@@ -21,94 +21,56 @@ frappe.ui.form.on("Nas Device", {
 			frappe.msgprint({
 				title: __("FAS Key Generated"),
 				indicator: "green",
-				message: __("The openNDS FAS key has been generated and saved on this NAS Device."),
+				message: __(
+					"The openNDS FAS key was generated and saved. Re-run the router setup script to apply it."
+				),
 			});
 		});
 
-		frm.add_custom_button(__("Generate Hardening Bundle"), async () => {
+		frm.add_custom_button(__("Router Setup Script"), async () => {
 			if (frm.is_dirty()) {
-				frappe.msgprint(__("Please save the document before generating the script."));
+				frappe.msgprint(__("Save the document first."));
 				return;
 			}
 
 			const result = await frappe.call({
-				method: "hotspot_ms.hotspot_ms.doctype.nas_device.nas_device.generate_openwrt_hardening_bundle",
-				args: {
-					name: frm.doc.name,
-					hotspot_iface: frm.doc.hotspot_iface || "br-lan",
-					conn_limit: 150,
-					ttl_value: 64,
-				},
-			});
-
-			const bundle = result.message && result.message.bundle;
-			if (!bundle) {
-				frappe.msgprint(__("Could not generate hardening bundle."));
-				return;
-			}
-
-			const dialog = new frappe.ui.Dialog({
-				title: __("OpenWrt Hardening Bundle"),
-				fields: [
-					{
-						fieldname: "bundle",
-						fieldtype: "Code",
-						label: __("Bundle"),
-						options: "Shell",
-						read_only: 1,
-						default: bundle,
-					},
-				],
-				size: "extra-large",
-				primary_action_label: __("Copy"),
-				primary_action() {
-					frappe.utils.copy_to_clipboard(bundle);
-					dialog.hide();
-					frappe.show_alert({ message: __("Bundle copied to clipboard"), indicator: "green" });
-				},
-			});
-
-			dialog.show();
-		});
-		frm.add_custom_button(__("Generate Provisioning Script"), async () => {
-			if (frm.is_dirty()) {
-				frappe.msgprint(__("Please save the document before generating the script."));
-				return;
-			}
-			if (!frm.doc.opennds_fas_key) {
-				frappe.msgprint(__("Please generate the FAS Key first."));
-				return;
-			}
-
-			const res = await frappe.call({
-				method: "hotspot_ms.hotspot_ms.doctype.nas_device.nas_device.get_provisioning_command",
+				method: "hotspot_ms.hotspot_ms.doctype.nas_device.nas_device.get_provisioning_script",
 				args: { name: frm.doc.name },
 			});
 
-			const cmd = res.message && res.message.command;
-			if (!cmd) {
-				frappe.msgprint(__("Could not generate provisioning command."));
+			const script = result.message && result.message.script;
+			if (!script) {
+				frappe.msgprint(__("Could not render the setup script."));
 				return;
 			}
 
+			const portalUrl = (result.message.portal_url || "").trim();
 			const dialog = new frappe.ui.Dialog({
-				title: __("OpenWrt Provisioning Script"),
+				title: __("Router Setup Script"),
 				fields: [
+					{
+						fieldtype: "HTML",
+						options: `<p class="text-muted">${__(
+							"Paste this into a root shell on the router. It is idempotent, and it refuses to run if the guest LAN interface is missing."
+						)}</p>
+						<p class="text-muted">${__("Portal URL")}: <b>${frappe.utils.escape_html(
+							portalUrl || __("not set")
+						)}</b></p>`,
+					},
 					{
 						fieldname: "script",
 						fieldtype: "Code",
-						label: __("Run this command on your router via SSH"),
 						options: "Shell",
 						read_only: 1,
-						default: cmd,
+						default: script,
 					},
 				],
-				size: "large",
-				primary_action_label: __("Copy Command"),
+				size: "extra-large",
+				primary_action_label: __("Copy Script"),
 				primary_action() {
-					frappe.utils.copy_to_clipboard(cmd);
+					frappe.utils.copy_to_clipboard(script);
 					dialog.hide();
-					frappe.show_alert({ message: __("Command copied to clipboard"), indicator: "green" });
+					frappe.show_alert({ message: __("Copied to clipboard"), indicator: "green" });
 				},
 			});
 

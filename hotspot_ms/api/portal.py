@@ -6,6 +6,7 @@ import hmac
 import math
 import secrets
 import string
+import subprocess
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Any
 
@@ -41,14 +42,54 @@ def _resolve_voucher(voucher_code: str):
 
 
 def generate_unique_voucher_code(length: int = 7) -> str:
-    import random
-
+    # secrets (not random): these codes are money - a predictable code lets
+    # anyone guess a not-yet-sold voucher and use it for free.
     # Alphabet specifically excludes 0, O, 1, I, l to avoid user confusion
     alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
     while True:
-        code = "".join(random.choice(alphabet) for _ in range(length))
+        code = "".join(secrets.choice(alphabet) for _ in range(length))
         if not frappe.db.exists("Hotspot Voucher", {"voucher_code": code}):
             return code
+
+
+_VALIDITY_MINUTES = {"minute": 1, "hour": 60, "day": 1440}
+
+
+def _validity_minutes(row: dict[str, Any]) -> int:
+    unit = (row.get("validity_unit") or "Days").strip().lower().rstrip("s")
+    value = cint(row.get("validity_value")) or 1
+    return max(1, value * _VALIDITY_MINUTES.get(unit, 1440))
+
+
+def _get_active_free_plan(fields: list[str] | None = None):
+    """Return the single free plan the portal should offer, deterministically.
+
+    Every free-tier endpoint needs "the" free plan, and each used to run its own
+    ``limit=1`` query with no ordering, so enabling two free plans made the
+    granted plan depend on row order. Prefer the shortest trial, then cheapest.
+    """
+    wanted = list(fields or ["name"])
+    for extra in ("name", "price", "validity_value", "validity_unit"):
+        if extra not in wanted:
+            wanted.append(extra)
+
+    rows = frappe.get_all(
+        "Hotspot Plan",
+        filters={"enabled": 1, "is_free": 1},
+        fields=wanted,
+        ignore_permissions=True,
+    )
+    if not rows:
+        return None
+
+    return min(
+        rows,
+        key=lambda row: (
+            _validity_minutes(row),
+            flt(row.get("price")),
+            row["name"],
+        ),
+    )
 
 
 def _issue_payment_voucher(plan_name: str, customer: str | None = None):
@@ -673,18 +714,12 @@ def claim_free_voucher(
         return _error("Device MAC address is required for free access", "MISSING_MAC")
 
     # Find the active free plan
-    free_plans = frappe.get_all(
-        "Hotspot Plan",
-        filters={"enabled": 1, "is_free": 1},
-        fields=["name", "plan_name", "requires_ad_view"],
-        ignore_permissions=True,
-        limit=1,
-    )
-    if not free_plans:
+    free_plan = _get_active_free_plan(["name", "plan_name", "requires_ad_view"])
+    if not free_plan:
         return _error("No free plan is currently available", "NO_FREE_PLAN")
 
-    plan_name = free_plans[0]["name"]
-    requires_ad_view = cint(free_plans[0].get("requires_ad_view"))
+    plan_name = free_plan["name"]
+    requires_ad_view = cint(free_plan.get("requires_ad_view"))
 
     # Check once-per-day limit
     if _has_claimed_free_today(mac_address, plan_name):
@@ -1437,18 +1472,8 @@ def request_session_deauth(
     )
 
 
-@frappe.whitelist(allow_guest=True)
-def pull_disconnect_actions(
-    nas_identifier: str, secret: str, limit: int = 20
-) -> dict[str, Any]:
-    """
-    Pull pending disconnect actions (deauth queue) for router-side agent.
-    Use with a NAS shared secret to avoid exposing control commands publicly.
-    """
-    nas_doc, error = _validate_nas_access(nas_identifier, secret)
-    if error:
-        return error
-
+def _pending_deauth_actions(nas_name: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Sessions waiting for a router-side disconnect, filtered to one NAS."""
     limit = max(1, min(cint(limit) or 20, 100))
     rows = frappe.get_all(
         "Hotspot Session",
@@ -1470,13 +1495,11 @@ def pull_disconnect_actions(
 
     actions = []
     for row in rows:
-        # If session is bound to a specific NAS, return only matching actions.
-        if row.get("nas_device") and row.get("nas_device") != nas_doc.name:
+        # If the session is bound to a specific NAS, only that NAS may act on it.
+        if row.get("nas_device") and row.get("nas_device") != nas_name:
             continue
 
-        reason = (row.get("terminate_cause") or "").replace(
-            DEAUTH_PENDING_PREFIX, "", 1
-        )
+        reason = (row.get("terminate_cause") or "").replace(DEAUTH_PENDING_PREFIX, "", 1)
         actions.append(
             {
                 "action_id": row.get("session_id"),
@@ -1487,7 +1510,22 @@ def pull_disconnect_actions(
                 "stop_time": row.get("stop_time"),
             }
         )
+    return actions
 
+
+@frappe.whitelist(allow_guest=True)
+def pull_disconnect_actions(
+    nas_identifier: str, secret: str, limit: int = 20
+) -> dict[str, Any]:
+    """
+    Pull pending disconnect actions (deauth queue) for router-side agent.
+    Use with a NAS shared secret to avoid exposing control commands publicly.
+    """
+    nas_doc, error = _validate_nas_access(nas_identifier, secret)
+    if error:
+        return error
+
+    actions = _pending_deauth_actions(nas_doc.name, limit)
     return _success("Disconnect actions fetched", actions=actions, count=len(actions))
 
 
@@ -1708,6 +1746,159 @@ def sync_session_usage(
     return _success("Session usage synchronized", updated_sessions=updated_count)
 
 
+_COUNTER_ALIASES = {
+    "upload": ("upload_this_session", "upload", "input_octets", "upload_bytes"),
+    "download": ("download_this_session", "download", "output_octets", "download_bytes"),
+}
+
+
+def _pick(client: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if client.get(key) is not None:
+            return client[key]
+    return 0
+
+
+def _router_client_map(router_clients: Any) -> dict[str, dict[str, Any]]:
+    """Normalise whatever the router sent into {mac: client-dict}."""
+    if not router_clients:
+        return {}
+
+    data = router_clients
+    if isinstance(data, str):
+        try:
+            data = frappe.parse_json(data)
+        except Exception:
+            return {}
+    if isinstance(data, list):
+        return {
+            _normalize_mac(item.get("mac") or item.get("mac_address")): item
+            for item in data
+            if isinstance(item, dict)
+        }
+    if not isinstance(data, dict):
+        return {}
+
+    clients = data.get("clients")
+    if not isinstance(clients, dict):
+        return {}
+    return {mac: client for mac, client in clients.items() if isinstance(client, dict)}
+
+
+def _records_from_router_state(router_clients: Any) -> list[dict[str, Any]]:
+    """Turn raw ``ndsctl json`` output into usage records.
+
+    Parsing lives here rather than in shell on the router. The previous shell
+    agent assumed a specific pretty-printed layout, which would silently break
+    on any format change, and it logged a sync failure on every single cycle
+    because it read the response envelope wrong. Key lookups are tolerant
+    because openNDS has used more than one counter name.
+    """
+    records = []
+    for mac, client in _router_client_map(router_clients).items():
+        mac = _normalize_mac(mac)
+        if not mac:
+            continue
+        state = (client.get("state") or "").strip().lower()
+        if state != "authenticated":
+            continue
+        records.append(
+            {
+                "mac_address": mac,
+                "input_octets": _pick(client, _COUNTER_ALIASES["upload"]),
+                "output_octets": _pick(client, _COUNTER_ALIASES["download"]),
+            }
+        )
+    return records
+
+
+@frappe.whitelist(allow_guest=True)
+def router_sync(
+    nas_identifier: str,
+    secret: str,
+    router_clients: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """One call per router cycle: upload router state, receive directives.
+
+    The router sends its raw ``ndsctl json`` output and gets back everything it
+    should do: which clients to authorize (valid voucher, reconnecting after a
+    reboot), which to deauthorize, and how much usage was recorded. This
+    replaces the old three-requests-per-cycle dance and keeps all openNDS
+    schema knowledge on the server.
+    """
+    nas_doc, error = _validate_nas_access(nas_identifier, secret)
+    if error:
+        return error
+
+    # A successful authenticated sync IS the heartbeat. The SSH-based task
+    # only runs every few minutes and marks routers Offline when a single SSH
+    # attempt fails; the agent talks to us every poll interval, so its view is
+    # the authoritative one.
+    frappe.db.set_value(
+        "Nas Device",
+        nas_doc.name,
+        {"status": "Online", "last_heartbeat": now_datetime()},
+        update_modified=False,
+    )
+
+    clients = _router_client_map(router_clients)
+
+    # 1. Clients that lost their lease but still own valid access.
+    authorize = []
+    for mac, client in clients.items():
+        state = (client.get("state") or "").strip().lower()
+        if state != "preauthenticated":
+            continue
+
+        decision = restore_active_access(
+            nas_identifier=nas_identifier,
+            secret=secret,
+            mac_address=mac,
+            ip_address=client.get("ip") or client.get("ip_address"),
+        )
+        if not decision.get("allow"):
+            continue
+
+        authorize.append(
+            {
+                "action": "authorize",
+                "mac_address": decision.get("mac_address") or _normalize_mac(mac),
+                "minutes": cint(decision.get("session_timeout_minutes")) or 1,
+                "session_id": decision.get("session_id"),
+                "voucher_code": decision.get("voucher_code"),
+            }
+        )
+
+    # 2. Disconnects queued by expiry, data limits or an admin kick.
+    deauthorize = [
+        {**action, "action": "deauthorize"}
+        for action in _pending_deauth_actions(nas_doc.name, limit)
+    ]
+
+    # 3. Usage counters, which also expire vouchers that hit their data cap.
+    records = _records_from_router_state(router_clients)
+    usage = {"updated_sessions": 0}
+    if records:
+        usage = sync_session_usage(
+            nas_identifier=nas_identifier,
+            secret=secret,
+            usage_data=frappe.as_json(records),
+        )
+
+    # Counts are returned so the router agent can iterate with indexed access
+    # instead of needing a JSON array parser in shell.
+    return _success(
+        "Router sync complete",
+        authorize=authorize,
+        authorize_count=len(authorize),
+        deauthorize=deauthorize,
+        deauthorize_count=len(deauthorize),
+        updated_sessions=cint(usage.get("updated_sessions")),
+        client_count=len(clients),
+    )
+
+
 @frappe.whitelist(allow_guest=True)
 def get_random_active_ad(mac_address: str | None = None) -> dict[str, Any]:
     """
@@ -1716,16 +1907,10 @@ def get_random_active_ad(mac_address: str | None = None) -> dict[str, Any]:
     """
     mac_address = _normalize_mac(mac_address)
     if mac_address:
-        free_plans = frappe.get_all(
-            "Hotspot Plan",
-            filters={"enabled": 1, "is_free": 1},
-            fields=["name", "max_slices_per_day"],
-            ignore_permissions=True,
-            limit=1,
-        )
-        if free_plans:
-            plan_name = free_plans[0]["name"]
-            max_slices = cint(free_plans[0].get("max_slices_per_day")) or 4
+        free_plan = _get_active_free_plan(["name", "max_slices_per_day"])
+        if free_plan:
+            plan_name = free_plan["name"]
+            max_slices = cint(free_plan.get("max_slices_per_day")) or 4
 
             today_start = now_datetime().replace(
                 hour=0, minute=0, second=0, microsecond=0
@@ -1774,7 +1959,7 @@ def get_random_active_ad(mac_address: str | None = None) -> dict[str, Any]:
             "ok": True,
             "ad": {
                 "name": "Fallback",
-                "title": "Welcome to Tanzania Hotspot",
+                "title": "Welcome to KiliGrid WiFi",
                 "ad_type": "Text",
                 "cta_url": "",
                 "video_file": "",
@@ -1812,14 +1997,10 @@ def check_free_slice_status(mac_address: str) -> dict[str, Any]:
     if not mac_address:
         return _error("MAC address is required", "MISSING_MAC")
 
-    free_plans = frappe.get_all(
-        "Hotspot Plan",
-        filters={"enabled": 1, "is_free": 1},
-        fields=["name", "validity_value", "validity_unit", "max_slices_per_day"],
-        ignore_permissions=True,
-        limit=1,
+    plan_doc = _get_active_free_plan(
+        ["name", "validity_value", "validity_unit", "max_slices_per_day"]
     )
-    if not free_plans:
+    if not plan_doc:
         return {
             "ok": True,
             "allowed": False,
@@ -1827,7 +2008,6 @@ def check_free_slice_status(mac_address: str) -> dict[str, Any]:
             "message": frappe._("No free plan is currently active."),
         }
 
-    plan_doc = free_plans[0]
     plan_name = plan_doc["name"]
     max_slices = cint(plan_doc.get("max_slices_per_day")) or 4
 
@@ -1901,23 +2081,18 @@ def log_ad_view_and_claim_slice(
         except Exception as e:
             frappe.log_error(f"Error logging ad view: {e}", "Ad Platform Error")
 
-    free_plans = frappe.get_all(
-        "Hotspot Plan",
-        filters={"enabled": 1, "is_free": 1},
-        fields=[
+    plan_doc = _get_active_free_plan(
+        [
             "name",
             "validity_value",
             "validity_unit",
             "max_slices_per_day",
             "data_limit_mb",
-        ],
-        ignore_permissions=True,
-        limit=1,
+        ]
     )
-    if not free_plans:
+    if not plan_doc:
         return _error("No free plan is currently available", "NO_FREE_PLAN")
 
-    plan_doc = free_plans[0]
     plan_name = plan_doc["name"]
     slice_duration_val = cint(plan_doc.get("validity_value")) or 15
     slice_duration_unit = (plan_doc.get("validity_unit") or "Minutes").lower()
