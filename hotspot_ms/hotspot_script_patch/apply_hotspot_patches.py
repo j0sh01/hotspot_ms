@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""KiliGrid patches for hotspot_ms. Run from the app root (apps/hotspot_ms).
+"""KiliGrid patches for hotspot_ms. Run once from the app root (apps/hotspot_ms).
 
+openwrt_setup.sh
   1. Wi-Fi-only mode  HOTSPOT_LAN_PHY=none -> guest LAN is the existing br-lan (no NIC needed)
-  2. DHCP             pool sized from the LAN mask (start 10, up to 1000), 2h leases
-  3. IPv4-only        DHCPv6 / RA off in every mode (openNDS only captures IPv4)
-  4. openNDS portal   router resolves the portal name to an IPv4; fasremoteip and the walled
+  2. DHCP             2h leases, DHCPv6 / RA off in every mode (openNDS only captures IPv4)
+  3. openNDS portal   router resolves the portal name to an IPv4; fasremoteip and the walled
                       garden use the IP, fasremotefqdn keeps the name (needed for HTTPS)
+provision.py
+  4. DHCP pool        start 10, size from the LAN mask (max 1000)
+hotspot_agent.sh
+  5. urlencode        pass the value via ENVIRON so awk does not interpret backslashes
+nas_device.py
+  6. permissions      the setup-script/command endpoints embed the secret and FAS key, so
+                      require write permission on the Nas Device
 
 Safe to re-run: applied patches are tagged [kiligrid:<name>] and skipped. Originals are kept
 as <file>.orig. Every anchor must match exactly one line, otherwise nothing is changed.
@@ -18,8 +25,11 @@ import sys
 
 TAG = "kiligrid"
 APP = pathlib.Path.cwd()
-TEMPLATE = APP / "hotspot_ms" / "scripts" / "openwrt_setup.sh"
-PROVISION = APP / "hotspot_ms" / "provision.py"
+PKG = APP / "hotspot_ms"
+TEMPLATE = PKG / "scripts" / "openwrt_setup.sh"
+AGENT = PKG / "scripts" / "hotspot_agent.sh"
+PROVISION = PKG / "provision.py"
+NAS_DEVICE = PKG / "hotspot_ms" / "doctype" / "nas_device" / "nas_device.py"
 
 TEMPLATE_EDITS = [
 	("wifi-flag", "ONE_ARMED=0", "after", [
@@ -76,6 +86,23 @@ PROVISION_EDITS = [
 	]),
 ]
 
+AGENT_EDITS = [
+	("urlencode-env", "awk -v s=\"$1\" 'BEGIN {", "replace", [
+		"S=\"$1\" awk 'BEGIN {",
+		'\ts = ENVIRON["S"]',
+	]),
+]
+
+NAS_DEVICE_EDITS = [
+	("perm-script", 'return {"ok": True, **provision.render_router_setup_script(name)}', "replace", [
+		'frappe.has_permission("Nas Device", "write", name, throw=True)',
+		'return {"ok": True, **provision.render_router_setup_script(name)}',
+	]),
+	("perm-command", "secret = _get_doc_secret(doc)", "before", [
+		'frappe.has_permission("Nas Device", "write", doc=doc, throw=True)',
+	]),
+]
+
 
 def find(lines, anchor):
 	hits = [i for i, line in enumerate(lines) if line.strip() == anchor]
@@ -118,20 +145,28 @@ def py_ok(path):
 		return False
 
 
+TARGETS = (
+	(TEMPLATE, TEMPLATE_EDITS, sh_ok),
+	(AGENT, AGENT_EDITS, sh_ok),
+	(PROVISION, PROVISION_EDITS, py_ok),
+	(NAS_DEVICE, NAS_DEVICE_EDITS, py_ok),
+)
+
+
 def main():
-	for path in (TEMPLATE, PROVISION):
+	for path, _, _ in TARGETS:
 		if not path.exists():
 			sys.exit(f"not found: {path}\nRun this from the app root (apps/hotspot_ms).")
 
+	# Plan every edit in memory first: if any anchor fails, nothing is written.
 	jobs = []
-	for path, edits, check in ((TEMPLATE, TEMPLATE_EDITS, sh_ok), (PROVISION, PROVISION_EDITS, py_ok)):
+	for path, edits, check in TARGETS:
 		print(path.relative_to(APP))
 		lines = path.read_text(encoding="utf-8").split("\n")
 		for edit in edits:
 			lines = apply_edit(lines, *edit)
 		jobs.append((path, "\n".join(lines), check))
 
-	# Everything matched: now write, keeping the first-ever copy as .orig.
 	for path, text, _ in jobs:
 		backup = path.with_name(path.name + ".orig")
 		if not backup.exists():
@@ -144,7 +179,7 @@ def main():
 			shutil.copy2(path.with_name(path.name + ".orig"), path)
 		sys.exit("syntax check failed for " + ", ".join(p.name for p in failed) + "; originals restored")
 
-	print("\nDone. Review with: git diff   (restart workers so provision.py reloads: bench restart)")
+	print("\nDone. Review with: git diff   (then: bench restart)")
 
 
 if __name__ == "__main__":
